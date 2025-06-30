@@ -1,0 +1,286 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Award, ClipboardList, Users, BarChart2, Info, Plus, Send, XCircle, Camera, FileText, ChevronDown, UploadCloud, Star, TrendingUp, Settings, CheckCircle } from 'lucide-react';
+
+// --- Komponen Utama Aplikasi ---
+export default function App() {
+  const [page, setPage] = useState('dashboard');
+  const [appsScriptUrl, setAppsScriptUrl] = useState('');
+  const [isUrlSet, setIsUrlSet] = useState(false);
+  const [tempUrl, setTempUrl] = useState('');
+
+  useEffect(() => {
+    const savedUrl = localStorage.getItem('appsScriptUrl');
+    if (savedUrl) {
+      setAppsScriptUrl(savedUrl);
+      setTempUrl(savedUrl);
+      setIsUrlSet(true);
+    }
+  }, []);
+
+  const handleSetUrl = () => {
+    localStorage.setItem('appsScriptUrl', tempUrl);
+    setAppsScriptUrl(tempUrl);
+    setIsUrlSet(true);
+  };
+
+  const renderPage = () => {
+    const commonProps = { appsScriptUrl, setPage };
+    switch (page) {
+      case 'dashboard': return <Dashboard {...commonProps} />;
+      case '5r_assessment': return <FiveRAssessmentPage {...commonProps} />;
+      case 'employee_assessment': return <PicPerformancePage {...commonProps} />;
+      case 'item_request': return <ItemRequestPage {...commonProps} />;
+      case 'data_management': return <DataManagementPage {...commonProps} />;
+      default: return <Dashboard {...commonProps} />;
+    }
+  };
+  
+  if (!isUrlSet) {
+    return (
+        <div className="flex justify-center items-center h-screen bg-gray-900 text-white p-4">
+            <div className="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-lg text-center">
+                <Settings size={48} className="mx-auto text-blue-400 mb-4"/>
+                <h1 className="text-2xl font-bold mb-2">Konfigurasi Backend</h1>
+                <p className="text-gray-400 mb-6">Tempel URL Web App dari Google Apps Script Anda untuk menghubungkan aplikasi ke Google Sheet.</p>
+                <input
+                    type="url"
+                    value={tempUrl}
+                    onChange={(e) => setTempUrl(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/..."
+                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg mb-4 text-center"
+                />
+                <button
+                    onClick={handleSetUrl}
+                    className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                    Simpan dan Lanjutkan
+                </button>
+                 <p className="text-xs text-gray-500 mt-4">URL ini akan disimpan di browser Anda. Ikuti petunjuk di dokumen untuk mendapatkannya.</p>
+            </div>
+        </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
+      <header className="flex items-center justify-between p-4 bg-gray-800 shadow-lg z-10">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md mr-3">DHJ</div>
+            <div><h1 className="text-xl font-bold text-white">5R Management</h1><p className="text-xs text-gray-400 flex items-center"><CheckCircle size={12} className="text-green-400 mr-1"/>Terhubung ke Google Sheets</p></div>
+          </div>
+          <button onClick={() => setIsUrlSet(false)} className="p-2 rounded-full hover:bg-gray-700"><Settings size={20}/></button>
+      </header>
+      <main className="flex-1 overflow-y-auto p-4 mb-20">
+          <AnimatePresence mode="wait">
+            <motion.div key={page} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
+               {renderPage()}
+            </motion.div>
+        </AnimatePresence>
+      </main>
+      <BottomNav activePage={page} setPage={setPage} />
+    </div>
+  );
+}
+
+// --- Hook Kustom untuk mengambil data dari Google Sheet ---
+const useGoogleSheet = (sheetName, appsScriptUrl) => {
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (!appsScriptUrl || !sheetName) {
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
+        setError('');
+
+        const payload = {
+            action: 'getData',
+            sheet: sheetName,
+        };
+
+        fetch(appsScriptUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(payload),
+            mode: 'cors', // Penting untuk cross-origin request
+        })
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            setData(data);
+        })
+        .catch(err => {
+            console.error(`Error fetching from sheet ${sheetName}:`, err);
+            setError(`Gagal memuat data dari sheet ${sheetName}. Periksa URL atau izin Google Sheet.`);
+        })
+        .finally(() => {
+            setLoading(false);
+        });
+    }, [sheetName, appsScriptUrl]);
+    
+    // Parse JSON strings in data
+    const parsedData = useMemo(() => {
+        return data.map(row => {
+            const newRow = {...row};
+            try {
+                if(newRow.details && typeof newRow.details === 'string') newRow.details = JSON.parse(newRow.details);
+                if(newRow.items && typeof newRow.items === 'string') newRow.items = JSON.parse(newRow.items);
+            } catch(e) {
+                console.error("Failed to parse JSON in row: ", row, e);
+            }
+            return newRow;
+        })
+    }, [data]);
+
+    return { data: parsedData, loading, error };
+};
+
+const postToGoogleSheet = (appsScriptUrl, action, payload) => {
+    return fetch(appsScriptUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action, payload }),
+        mode: 'cors',
+    }).then(res => res.json());
+};
+
+
+// --- Komponen-komponen lainnya (Dashboard, 5R, PIC, Item, Data) ---
+
+const Dashboard = ({ appsScriptUrl }) => {
+    const { data: assessments, loading: loadingAssessments, error: errorAssessments } = useGoogleSheet('5R_Assessments', appsScriptUrl);
+    const { data: workshops, loading: loadingWorkshops, error: errorWorkshops } = useGoogleSheet('Workshops', appsScriptUrl);
+    const { data: employees, loading: loadingEmployees, error: errorEmployees } = useGoogleSheet('Employees', appsScriptUrl);
+    
+    const leaderboardData = useMemo(() => {
+        if (!assessments.length || !workshops.length) return [];
+        const workshopMap = new Map(workshops.map(w => [w.id, {...w, totalScore: 0, count: 0}]));
+        assessments.forEach(a => {
+            const workshop = workshopMap.get(a.workshopId);
+            if (workshop && a.details) {
+                const averageScore = Object.values(a.details).reduce((s, v) => s + v.score, 0) / Object.keys(a.details).length;
+                workshop.totalScore += averageScore;
+                workshop.count += 1;
+            }
+        });
+        return Array.from(workshopMap.values()).map(w => ({ ...w, averageScore: w.count > 0 ? w.totalScore / w.count : 0 })).sort((a, b) => b.averageScore - a.averageScore);
+    }, [assessments, workshops]);
+
+    const picPerformanceData = useMemo(() => {
+        if (!assessments.length || !employees.length) return [];
+        const employeeMap = new Map(employees.map(emp => [emp.id, { name: emp.name, picCount: 0, totalScore: 0 }]));
+        assessments.forEach(a => {
+            if (a.picId && employeeMap.has(a.picId)) {
+                const picData = employeeMap.get(a.picId);
+                const assessmentAvg = Object.values(a.details).reduce((sum, detail) => sum + detail.score, 0) / 5;
+                picData.picCount += 1;
+                picData.totalScore += assessmentAvg;
+            }
+        });
+        return Array.from(employeeMap.values()).filter(emp => emp.picCount > 0).map(emp => ({ ...emp, averageScore: emp.totalScore / emp.picCount })).sort((a, b) => b.averageScore - a.averageScore);
+    }, [assessments, employees]);
+
+    if (loadingAssessments || loadingWorkshops || loadingEmployees) {
+        return <div className="text-center text-gray-400">Memuat data dasbor...</div>
+    }
+    
+    const anyError = errorAssessments || errorWorkshops || errorEmployees;
+    if (anyError) {
+        return <div className="p-4 bg-red-800/50 text-red-300 rounded-lg">{anyError}</div>
+    }
+
+    return (<div><h1 className="text-3xl font-bold text-white mb-6">Dasbor & Klasemen</h1><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.2}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-yellow-400 mb-4 flex items-center"><Award className="mr-2"/>Workshop Terbaik</h2><div className="space-y-3">{leaderboardData.slice(0,3).map((w, i) => (<div key={w.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{i+1} {w.name}</p><p className="font-bold text-green-400">{w.averageScore.toFixed(2)}</p></div>))}{leaderboardData.length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.3}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-cyan-400 mb-4 flex items-center"><Star className="mr-2"/>Karyawan Terbaik (PIC)</h2><div className="space-y-3">{picPerformanceData.slice(0,3).map((p, i) => (<div key={p.name} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{i+1} {p.name}</p><p className="font-bold text-cyan-400">{p.averageScore.toFixed(2)}</p></div>))}{picPerformanceData.length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.4}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-red-400 mb-4 flex items-center"><TrendingUp className="mr-2"/>Workshop Perlu Perhatian</h2><div className="space-y-3">{leaderboardData.filter(w => w.count > 0).slice(-3).reverse().map((w, i) => (<div key={w.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{leaderboardData.length - i} {w.name}</p><p className="font-bold text-red-400">{w.averageScore.toFixed(2)}</p></div>))}{leaderboardData.filter(w => w.count > 0).length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div></div></div>);
+};
+
+const FiveRAssessmentPage = ({ appsScriptUrl, setPage }) => {
+    const { data: workshops } = useGoogleSheet('Workshops', appsScriptUrl);
+    const { data: employees } = useGoogleSheet('Employees', appsScriptUrl);
+    const [selectedWorkshop, setSelectedWorkshop] = useState('');
+    const [selectedPIC, setSelectedPIC] = useState('');
+    const initialAssessmentState = { ringkas: { score: 5, description: ''}, rapi: { score: 5, description: ''}, resik: { score: 5, description: ''}, rawat: { score: 5, description: '' }, rajin: { score: 5, description: '' }, };
+    const [details, setDetails] = useState(initialAssessmentState);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [infoModalOpen, setInfoModalOpen] = useState(false);
+    
+    useEffect(() => {
+        if(workshops.length > 0) setSelectedWorkshop(workshops[0].id);
+        if(employees.length > 0) setSelectedPIC(employees[0].id);
+    }, [workshops, employees])
+    
+    const handleSubmit = async (e) => {
+        e.preventDefault(); setIsSubmitting(true);
+        try {
+            await postToGoogleSheet(appsScriptUrl, 'addAssessment', { workshopId: selectedWorkshop, picId: selectedPIC, details });
+            setDetails(initialAssessmentState);
+            alert("Penilaian berhasil disimpan!");
+            setPage('dashboard');
+        } catch (err) { console.error(err); alert("Gagal menyimpan penilaian.") } finally { setIsSubmitting(false); }
+    };
+    return (<> <AnimatePresence>{infoModalOpen && <FiveRInfoModal onClose={() => setInfoModalOpen(false)} />}</AnimatePresence> <div className="max-w-2xl mx-auto"><div className="flex justify-between items-center mb-6"><h1 className="text-3xl font-bold text-white">Penilaian 5R</h1><motion.button whileHover={{scale: 1.1}} whileTap={{scale: 0.9}} onClick={() => setInfoModalOpen(true)} className="p-2 rounded-full bg-gray-700 hover:bg-blue-600"><Info className="h-5 w-5"/></motion.button></div><form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select value={selectedWorkshop} onChange={e => setSelectedWorkshop(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"><option disabled value="">Pilih Workshop</option>{workshops.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><select value={selectedPIC} onChange={e => setSelectedPIC(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"><option disabled value="">Pilih PIC</option>{employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></div><p className="text-gray-400 text-sm">Fitur upload foto tidak tersedia saat menggunakan Google Sheets sebagai database.</p><motion.button type="submit" disabled={isSubmitting || !selectedWorkshop || !selectedPIC} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 disabled:bg-gray-500"> {isSubmitting ? 'Menyimpan...' : 'Simpan Penilaian'}</motion.button></form></div> </>);
+};
+
+const PicPerformancePage = ({ appsScriptUrl }) => {
+    const { data: assessments, loading: loadingAssessments, error: errorAssessments } = useGoogleSheet('5R_Assessments', appsScriptUrl);
+    const { data: employees, loading: loadingEmployees, error: errorEmployees } = useGoogleSheet('Employees', appsScriptUrl);
+    const picPerformanceData = useMemo(() => {
+        if (!assessments.length || !employees.length) return [];
+        const employeeMap = new Map(employees.map(emp => [emp.id, { name: emp.name, picCount: 0, totalScore: 0 }]));
+        assessments.forEach(a => {
+            if (a.picId && employeeMap.has(a.picId)) {
+                const picData = employeeMap.get(a.picId);
+                const assessmentAvg = Object.values(a.details).reduce((sum, detail) => sum + detail.score, 0) / 5;
+                picData.picCount += 1;
+                picData.totalScore += assessmentAvg;
+            }
+        });
+        return Array.from(employeeMap.values()).filter(emp => emp.picCount > 0).map(emp => ({ ...emp, averageScore: emp.totalScore / emp.picCount })).sort((a, b) => b.averageScore - a.averageScore);
+    }, [assessments, employees]);
+    return (<div><h1 className="text-3xl font-bold text-white mb-6">Kinerja Karyawan (PIC)</h1><div className="bg-gray-800 p-4 rounded-xl shadow-lg space-y-3">{picPerformanceData.map((pic, index) => ( <motion.div key={pic.name} initial={{opacity:0, x: -20}} animate={{opacity:1, x:0}} transition={{delay: index * 0.1}} className="bg-gray-700 p-4 rounded-lg flex items-center justify-between"><div className="flex items-center"><span className="font-bold text-lg text-gray-400 mr-4">#{index + 1}</span><div><p className="font-semibold text-white">{pic.name}</p><p className="text-xs text-gray-400">PIC sebanyak {pic.picCount} kali</p></div></div><div className="text-right"><p className="font-bold text-2xl text-blue-400">{pic.averageScore.toFixed(2)}</p><p className="text-xs text-gray-500">Skor rata-rata</p></div></motion.div>))}{picPerformanceData.length === 0 && (<div className="text-center py-8"><Users className="mx-auto h-12 w-12 text-gray-500 mb-2"/><p className="text-gray-400">Belum ada data kinerja PIC.</p></div>)}</div></div>);
+};
+
+const ItemRequestPage = ({ appsScriptUrl, setPage }) => {
+    const { data: workshops } = useGoogleSheet('Workshops', appsScriptUrl);
+    const [items, setItems] = useState([{ id: Date.now(), name: '', quantity: 1 }]);
+    const [selectedWorkshop, setSelectedWorkshop] = useState('');
+    const [reason, setReason] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState('');
+    useEffect(() => {if(workshops.length > 0) setSelectedWorkshop(workshops[0].id)}, [workshops]);
+    const handleItemChange = (id, field, value) => setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+    const addItemRow = () => setItems([...items, { id: Date.now(), name: '', quantity: 1 }]);
+    const removeItemRow = (id) => setItems(items.filter(item => item.id !== id));
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        const validItems = items.filter(item => item.name.trim() !== '');
+        if (validItems.length === 0 || !selectedWorkshop || !reason) { setMessage("Harap isi semua field."); return; }
+        setIsSubmitting(true); setMessage('');
+        try {
+            await postToGoogleSheet(appsScriptUrl, 'addItemRequest', { items: validItems, workshopId: selectedWorkshop, reason, status: 'pending' });
+            setMessage("Permintaan berhasil dikirim!");
+            setItems([{ id: Date.now(), name: '', quantity: 1 }]); setReason('');
+            setTimeout(() => { setMessage(''); setPage('dashboard'); }, 1500);
+        } catch (err) { setMessage("Gagal mengirim permintaan."); } finally { setIsSubmitting(false); }
+    };
+    return (<div><h1 className="text-3xl font-bold text-white mb-6">Permintaan Barang</h1><form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6"><div className="space-y-4"><AnimatePresence>{items.map((item, index) => (<motion.div key={item.id} layout initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -300, transition: { duration: 0.3 } }} className="flex items-center space-x-2"><input type="text" placeholder={`Barang #${index + 1}`} value={item.name} onChange={e=> handleItemChange(item.id, 'name', e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" /><input type="number" min="1" value={item.quantity} onChange={e=> handleItemChange(item.id, 'quantity', e.target.value)} className="w-24 p-3 bg-gray-700 border border-gray-600 rounded-lg" />{items.length > 1 && <motion.button type="button" onClick={() => removeItemRow(item.id)} className="p-3 text-red-400 hover:text-red-300" whileTap={{ scale: 0.9 }}><XCircle size={20}/></motion.button>}</motion.div>))}</AnimatePresence></div><motion.button type="button" onClick={addItemRow} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full flex justify-center items-center p-2 bg-gray-700 hover:bg-gray-600 text-blue-400 rounded-lg transition-colors"><Plus className="mr-2" size={16}/> Tambah Barang</motion.button><div className="pt-6 border-t border-gray-700 space-y-4"><select value={selectedWorkshop} onChange={e => setSelectedWorkshop(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" required><option value="" disabled>Pilih Workshop Tujuan</option>{workshops.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><textarea placeholder="Alasan Permintaan..." value={reason} onChange={e=>setReason(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" rows="3" required></textarea></div>{message && <p className={`text-sm text-center ${message.includes('Gagal') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>}<motion.button type="submit" disabled={isSubmitting} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-500 flex items-center justify-center"><Send className="mr-2 h-5 w-5"/>{isSubmitting ? 'Mengirim...' : 'Kirim Semua Permintaan'}</motion.button></form></div>);
+};
+
+const DataManagementPage = ({ appsScriptUrl }) => {
+    return (<div><h1 className="text-3xl font-bold text-white mb-6">Manajemen Data</h1> ... </div>);
+};
+
+
+const BottomNav = ({ activePage, setPage }) => {
+  const navItems = [ { id: 'dashboard', label: 'Dasbor', icon: Award }, { id: '5r_assessment', label: 'Nilai 5R', icon: ClipboardList }, { id: 'item_request', label: 'Barang', icon: Plus }, { id: 'employee_assessment', label: 'Karyawan', icon: Users }, { id: 'data_management', label: 'Data', icon: BarChart2 }, ];
+  return (<nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 flex justify-around shadow-top z-20">{navItems.map(item => (<motion.button key={item.id} onClick={() => setPage(item.id)} className={`relative flex flex-col items-center justify-center w-full pt-3 pb-2 text-xs transition-colors duration-300 ${activePage === item.id ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>{activePage === item.id && (<motion.div layoutId="active-nav-bubble" className="absolute inset-0 bg-blue-500/10" style={{borderRadius: '12px'}}></motion.div>)}<item.icon className={`h-6 w-6 mb-1`} />{item.label}</motion.button>))}</nav>);
+};
