@@ -1,286 +1,990 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Award, ClipboardList, Users, BarChart2, Info, Plus, Send, XCircle, Camera, FileText, ChevronDown, UploadCloud, Star, TrendingUp, Settings, CheckCircle } from 'lucide-react';
+<!DOCTYPE html>
+<!-- Chosen Palette: "Sky Blue & Slate" - A professional and calm palette using slate grays for backgrounds/text and a vibrant sky blue for primary actions and highlights, creating a clean, modern, and trustworthy feel for a data-oriented application. -->
+<!-- Application Structure Plan: A task-oriented Single Page Application (SPA) with a persistent sidebar for navigation. The structure is designed for an efficient user workflow:
+1.  **Login Screen**: Secure entry point.
+2.  **Main Container**: Post-login, holds the sidebar and main content area.
+3.  **Sidebar**: Provides clear, icon-driven navigation between the app's core functions (Dasbor, Audit, Laporan, Pengaturan), accessible based on user role. This constant navigation structure allows users to easily switch between tasks without losing context.
+4.  **Pages**:
+    * **Dasbor**: The landing page, designed as a high-level dashboard. It immediately informs the user of the program's status with summary cards and visual leaderboards. This prioritizes quick insights and performance comparison.
+    * **Audit**: A dedicated page for the primary task of data entry. A clean, multi-step form guides the user through the audit process, minimizing cognitive load.
+    * **Laporan**: A data exploration hub. A searchable and filterable table allows for detailed analysis of historical data, with export functionality for offline use.
+    * **Pengaturan**: A centralized control panel for administrators to manage all master data (Users, Employees, Workshops). Grouping these settings logically simplifies administrative tasks.
+This structure was chosen to separate distinct user tasks (viewing summaries, inputting data, analyzing details, managing settings) into clear, focused sections, enhancing usability and efficiency. -->
+<!-- Visualization & Content Choices:
+* **Report Info**: Overall program status (total employees, workshops, audits). -> **Goal**: Inform. -> **Viz/Method**: Styled numeric cards with icons. -> **Interaction**: None. -> **Justification**: Provides a quick, scannable overview of key metrics. -> **Library/Method**: HTML/Tailwind CSS.
+* **Report Info**: Top 3 performing employees and workshops. -> **Goal**: Compare/Highlight. -> **Viz/Method**: Styled ordered lists as leaderboards. -> **Interaction**: None. -> **Justification**: Immediately highlights top performers and encourages competition, a key driver in 5R programs. -> **Library/Method**: HTML/Tailwind CSS with Unicode characters (🏆).
+* **Report Info**: Overall employee performance ranking. -> **Goal**: Compare. -> **Viz/Method**: Vertical Bar Chart showing top 10 employees by average score. -> **Interaction**: Tooltip on hover shows exact score. -> **Justification**: A bar chart is the most effective way to visually compare scores across multiple distinct entities. -> **Library/Method**: Chart.js (Canvas).
+* **Report Info**: Complete audit history. -> **Goal**: Organize/Inform. -> **Viz/Method**: A comprehensive HTML table. -> **Interaction**: Clicking "Lihat" opens a detail modal. -> **Justification**: A table is the standard and most effective way to present detailed, structured data for review. The modal prevents context switching. -> **Library/Method**: HTML/Tailwind CSS, JS for modal.
+* **Report Info**: Detailed scores for a single audit. -> **Goal**: Inform (Drill-down). -> **Viz/Method**: A modal popup with a structured list of scores. -> **Interaction**: Close modal. -> **Justification**: Provides detailed information on demand without cluttering the main report view. -> **Library/Method**: JS-generated HTML in a modal.
+* **Report Info**: User, employee, and workshop master data. -> **Goal**: Organize/Manage. -> **Viz/Method**: Forms for adding, lists for displaying. -> **Interaction**: Add, Edit, Delete buttons triggering modals or actions. -> **Justification**: Standard CRUD interface is the most intuitive for data management tasks. -> **Library/Method**: HTML Forms, JS.
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Manajemen 5R</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@0.378.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #64748b; border-radius: 10px; }
+        .dark ::-webkit-scrollbar-track { background: #1e293b; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+        .loader { border-top-color: #38bdf8; animation: spinner 1.5s linear infinite; }
+        @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300">
 
-// --- Komponen Utama Aplikasi ---
-export default function App() {
-  const [page, setPage] = useState('dashboard');
-  const [appsScriptUrl, setAppsScriptUrl] = useState('');
-  const [isUrlSet, setIsUrlSet] = useState(false);
-  const [tempUrl, setTempUrl] = useState('');
-
-  useEffect(() => {
-    const savedUrl = localStorage.getItem('appsScriptUrl');
-    if (savedUrl) {
-      setAppsScriptUrl(savedUrl);
-      setTempUrl(savedUrl);
-      setIsUrlSet(true);
-    }
-  }, []);
-
-  const handleSetUrl = () => {
-    localStorage.setItem('appsScriptUrl', tempUrl);
-    setAppsScriptUrl(tempUrl);
-    setIsUrlSet(true);
-  };
-
-  const renderPage = () => {
-    const commonProps = { appsScriptUrl, setPage };
-    switch (page) {
-      case 'dashboard': return <Dashboard {...commonProps} />;
-      case '5r_assessment': return <FiveRAssessmentPage {...commonProps} />;
-      case 'employee_assessment': return <PicPerformancePage {...commonProps} />;
-      case 'item_request': return <ItemRequestPage {...commonProps} />;
-      case 'data_management': return <DataManagementPage {...commonProps} />;
-      default: return <Dashboard {...commonProps} />;
-    }
-  };
-  
-  if (!isUrlSet) {
-    return (
-        <div className="flex justify-center items-center h-screen bg-gray-900 text-white p-4">
-            <div className="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-lg text-center">
-                <Settings size={48} className="mx-auto text-blue-400 mb-4"/>
-                <h1 className="text-2xl font-bold mb-2">Konfigurasi Backend</h1>
-                <p className="text-gray-400 mb-6">Tempel URL Web App dari Google Apps Script Anda untuk menghubungkan aplikasi ke Google Sheet.</p>
-                <input
-                    type="url"
-                    value={tempUrl}
-                    onChange={(e) => setTempUrl(e.target.value)}
-                    placeholder="https://script.google.com/macros/s/..."
-                    className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg mb-4 text-center"
-                />
-                <button
-                    onClick={handleSetUrl}
-                    className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                    Simpan dan Lanjutkan
-                </button>
-                 <p className="text-xs text-gray-500 mt-4">URL ini akan disimpan di browser Anda. Ikuti petunjuk di dokumen untuk mendapatkannya.</p>
-            </div>
-        </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white font-sans">
-      <header className="flex items-center justify-between p-4 bg-gray-800 shadow-lg z-10">
-          <div className="flex items-center">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md mr-3">DHJ</div>
-            <div><h1 className="text-xl font-bold text-white">5R Management</h1><p className="text-xs text-gray-400 flex items-center"><CheckCircle size={12} className="text-green-400 mr-1"/>Terhubung ke Google Sheets</p></div>
-          </div>
-          <button onClick={() => setIsUrlSet(false)} className="p-2 rounded-full hover:bg-gray-700"><Settings size={20}/></button>
-      </header>
-      <main className="flex-1 overflow-y-auto p-4 mb-20">
-          <AnimatePresence mode="wait">
-            <motion.div key={page} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} transition={{ duration: 0.3 }}>
-               {renderPage()}
-            </motion.div>
-        </AnimatePresence>
-      </main>
-      <BottomNav activePage={page} setPage={setPage} />
+    <div id="loading-overlay" class="fixed inset-0 bg-slate-900 bg-opacity-70 flex flex-col items-center justify-center z-50">
+        <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mb-4"></div>
+        <h2 id="loading-text" class="text-center text-white text-xl font-semibold">Menghubungkan ke Server...</h2>
+        <p class="w-2/3 text-center text-white mt-2 text-sm">Harap tunggu, sedang menyiapkan aplikasi.</p>
     </div>
-  );
-}
 
-// --- Hook Kustom untuk mengambil data dari Google Sheet ---
-const useGoogleSheet = (sheetName, appsScriptUrl) => {
-    const [data, setData] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState('');
+    <div id="login-screen" class="flex items-center justify-center h-screen hidden">
+        <div class="w-full max-w-md p-8 space-y-8 bg-white dark:bg-slate-800 rounded-2xl shadow-xl">
+            <div class="text-center">
+                 <div class="mx-auto bg-sky-500 p-3 rounded-lg w-fit mb-4">
+                    <i data-lucide="scan-line" class="text-white h-8 w-8"></i>
+                </div>
+                <h2 class="text-3xl font-bold text-slate-900 dark:text-white">Login Aplikasi 5R</h2>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">Silakan masuk untuk melanjutkan</p>
+            </div>
+            <form id="login-form" class="space-y-6">
+                <div>
+                    <label for="username" class="text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
+                    <input id="username" name="username" type="text" required class="mt-2 w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="Username">
+                </div>
+                <div>
+                    <label for="password" class="text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                    <input id="password" name="password" type="password" required class="mt-2 w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none" placeholder="Password">
+                </div>
+                <p id="login-error" class="text-sm text-red-500 text-center hidden"></p>
+                <div>
+                    <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-sky-500 hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-colors">
+                        Login
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-    useEffect(() => {
-        if (!appsScriptUrl || !sheetName) {
-            setLoading(false);
-            return;
-        }
-        setLoading(true);
-        setError('');
+    <div id="app-container" class="flex h-screen hidden">
+        <aside class="w-64 bg-white dark:bg-slate-800/50 backdrop-blur-sm border-r border-slate-200 dark:border-slate-700 flex flex-col transition-colors duration-300">
+            <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                <div class="bg-sky-500 p-2 rounded-lg">
+                    <i data-lucide="scan-line" class="text-white"></i>
+                </div>
+                <h1 class="text-xl font-bold text-sky-500">Manajemen 5R</h1>
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <a href="#" data-page="dashboard" class="nav-link flex items-center gap-3 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-sky-500 hover:text-white font-medium">
+                    <i data-lucide="layout-dashboard"></i> Dasbor
+                </a>
+                <a href="#" data-page="audit" id="nav-audit" class="nav-link flex items-center gap-3 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-sky-500 hover:text-white font-medium">
+                    <i data-lucide="clipboard-check"></i> Audit 5R
+                </a>
+                <a href="#" data-page="laporan" class="nav-link flex items-center gap-3 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-sky-500 hover:text-white font-medium">
+                    <i data-lucide="file-text"></i> Laporan
+                </a>
+                <a href="#" data-page="pengaturan" id="nav-pengaturan" class="nav-link flex items-center gap-3 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-sky-500 hover:text-white font-medium">
+                    <i data-lucide="settings"></i> Pengaturan
+                </a>
+            </nav>
+            <div class="p-4 border-t border-slate-200 dark:border-slate-700">
+                 <button id="logoutBtn" class="w-full flex items-center justify-center gap-2 px-4 py-2 mb-4 rounded-lg text-slate-600 dark:text-slate-300 bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white font-medium transition-colors">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> Log Out
+                </button>
+                <div class="text-xs text-slate-400 mb-1">Login sebagai:</div>
+                <div id="loggedInUserDisplay" class="text-sm font-semibold text-slate-700 dark:text-slate-200 break-words">Loading...</div>
+            </div>
+        </aside>
 
-        const payload = {
-            action: 'getData',
-            sheet: sheetName,
+        <main class="flex-1 p-6 overflow-y-auto">
+            <div id="page-dashboard" class="page-content">
+                <h2 class="text-3xl font-bold mb-6">Dasbor</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-sky-100 dark:bg-sky-900/50 p-3 rounded-full"><i data-lucide="users" class="text-sky-500"></i></div>
+                            <div>
+                                <p class="text-slate-500 dark:text-slate-400">Total Karyawan</p>
+                                <p id="totalKaryawan" class="text-2xl font-bold">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-emerald-100 dark:bg-emerald-900/50 p-3 rounded-full"><i data-lucide="building-2" class="text-emerald-500"></i></div>
+                            <div>
+                                <p class="text-slate-500 dark:text-slate-400">Total Workshop</p>
+                                <p id="totalWorkshop" class="text-2xl font-bold">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <div class="flex items-center gap-4">
+                            <div class="bg-amber-100 dark:bg-amber-900/50 p-3 rounded-full"><i data-lucide="clipboard-list" class="text-amber-500"></i></div>
+                            <div>
+                                <p class="text-slate-500 dark:text-slate-400">Total Audit</p>
+                                <p id="totalAudit" class="text-2xl font-bold">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <h3 class="text-xl font-bold mb-4">3 Karyawan Terbaik</h3>
+                        <ol id="topEmployeesList" class="space-y-4"></ol>
+                    </div>
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <h3 class="text-xl font-bold mb-4">3 Workshop Terbaik</h3>
+                        <ol id="topWorkshopsList" class="space-y-4"></ol>
+                    </div>
+                </div>
+
+                <div class="mt-8 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                    <h3 class="text-xl font-bold mb-4">Klasemen Karyawan (Top 10)</h3>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">Berdasarkan skor rata-rata dari semua audit.</p>
+                    <div class="chart-container h-96 relative">
+                        <canvas id="leaderboardChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-audit" class="page-content hidden">
+                <h2 class="text-3xl font-bold mb-6">Lakukan Audit 5R</h2>
+                <form id="auditForm" class="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-md max-w-4xl mx-auto">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <label for="auditKaryawan" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Karyawan yang Diaudit</label>
+                            <select id="auditKaryawan" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-3 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"></select>
+                        </div>
+                        <div>
+                            <label for="auditWorkshop" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Lokasi/Workshop</label>
+                            <select id="auditWorkshop" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-3 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none"></select>
+                        </div>
+                    </div>
+                    
+                    <div id="auditCriteriaContainer" class="space-y-8"></div>
+
+                    <div class="mt-8 text-right">
+                        <button type="submit" class="bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 px-6 rounded-lg transition-colors duration-300 flex items-center gap-2 ml-auto">
+                            <i data-lucide="save"></i> Simpan Hasil Audit
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="page-laporan" class="page-content hidden">
+                <h2 class="text-3xl font-bold mb-2">Laporan Audit</h2>
+                <p class="text-slate-500 dark:text-slate-400 mb-6">Lihat semua riwayat audit dan ekspor data.</p>
+                <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                    <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                        <h3 class="text-xl font-bold">Riwayat Audit</h3>
+                        <div class="flex gap-2">
+                            <button id="exportPdfBtn" class="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors">
+                                <i data-lucide="file-type-2" class="w-4 h-4"></i> PDF
+                            </button>
+                            <button id="exportExcelBtn" class="bg-green-500 hover:bg-green-600 text-white font-medium py-2 px-4 rounded-lg flex items-center gap-2 transition-colors">
+                                <i data-lucide="file-spreadsheet" class="w-4 h-4"></i> Excel
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left">
+                            <thead class="text-xs text-slate-700 dark:text-slate-300 uppercase bg-slate-50 dark:bg-slate-700">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3">Tanggal</th>
+                                    <th scope="col" class="px-6 py-3">Karyawan</th>
+                                    <th scope="col" class="px-6 py-3">Workshop</th>
+                                    <th scope="col" class="px-6 py-3">Skor</th>
+                                    <th scope="col" class="px-6 py-3 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody id="laporanTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="page-pengaturan" class="page-content hidden">
+                <h2 class="text-3xl font-bold mb-6">Pengaturan</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <h3 class="text-xl font-bold mb-4">Manajemen Karyawan</h3>
+                        <form id="formKaryawan" class="space-y-4 mb-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label for="nikKaryawan" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">NIK</label>
+                                    <input type="text" id="nikKaryawan" placeholder="e.g., 12345" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                                </div>
+                                <div>
+                                    <label for="namaKaryawan" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Nama Karyawan</label>
+                                    <input type="text" id="namaKaryawan" placeholder="e.g., Budi Santoso" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
+                                <i data-lucide="plus"></i> Tambah Karyawan
+                            </button>
+                        </form>
+                        <ul id="listKaryawan" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                        <h3 class="text-xl font-bold mb-4">Manajemen Workshop</h3>
+                        <form id="formWorkshop" class="flex gap-2 mb-4">
+                            <input type="text" id="namaWorkshop" placeholder="Nama Workshop Baru" required class="flex-grow bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                            <button type="submit" class="bg-sky-500 hover:bg-sky-600 text-white font-medium p-2 rounded-lg flex items-center justify-center"><i data-lucide="plus"></i></button>
+                        </form>
+                        <ul id="listWorkshop" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                    </div>
+                </div>
+                <div class="mt-8 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+                    <h3 class="text-xl font-bold mb-4">Manajemen Pengguna</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Tambah Pengguna Baru</h4>
+                            <form id="formPengguna" class="space-y-4">
+                                <div>
+                                    <label for="usernamePengguna" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Username</label>
+                                    <input type="text" id="usernamePengguna" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                                </div>
+                                <div>
+                                    <label for="passwordPengguna" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Password</label>
+                                    <input type="password" id="passwordPengguna" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                                </div>
+                                <div>
+                                    <label for="rolePengguna" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Nama Bagian</label>
+                                    <select id="rolePengguna" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 focus:ring-2 focus:ring-sky-500 focus:border-sky-500 outline-none">
+                                        <option value="Admin">Admin</option>
+                                        <option value="Auditor">Auditor</option>
+                                        <option value="User">User</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2">
+                                    <i data-lucide="user-plus"></i> Tambah Pengguna
+                                </button>
+                            </form>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-semibold mb-3">Daftar Pengguna</h4>
+                            <ul id="listPengguna" class="space-y-2 max-h-60 overflow-y-auto pr-2"></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div id="modalContent" class="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-lg p-6 transform transition-all scale-95 opacity-0"></div>
+    </div>
+    
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-3 px-5 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-300">
+        <p id="toastMessage"></p>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, doc, deleteDoc, getDocs, query, where, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const DOM = {
+            loadingOverlay: document.getElementById('loading-overlay'),
+            loadingText: document.getElementById('loading-text'),
+            loginScreen: document.getElementById('login-screen'),
+            loginForm: document.getElementById('login-form'),
+            loginError: document.getElementById('login-error'),
+            appContainer: document.getElementById('app-container'),
+            logoutBtn: document.getElementById('logoutBtn'),
+            loggedInUserDisplay: document.getElementById('loggedInUserDisplay'),
+            navAudit: document.getElementById('nav-audit'),
+            navPengaturan: document.getElementById('nav-pengaturan'),
+            totalKaryawan: document.getElementById('totalKaryawan'),
+            totalWorkshop: document.getElementById('totalWorkshop'),
+            totalAudit: document.getElementById('totalAudit'),
+            topEmployeesList: document.getElementById('topEmployeesList'),
+            topWorkshopsList: document.getElementById('topWorkshopsList'),
+            leaderboardChartCtx: document.getElementById('leaderboardChart').getContext('2d'),
+            auditForm: document.getElementById('auditForm'),
+            auditKaryawan: document.getElementById('auditKaryawan'),
+            auditWorkshop: document.getElementById('auditWorkshop'),
+            auditCriteriaContainer: document.getElementById('auditCriteriaContainer'),
+            laporanTableBody: document.getElementById('laporanTableBody'),
+            exportPdfBtn: document.getElementById('exportPdfBtn'),
+            exportExcelBtn: document.getElementById('exportExcelBtn'),
+            formKaryawan: document.getElementById('formKaryawan'),
+            listKaryawan: document.getElementById('listKaryawan'),
+            formWorkshop: document.getElementById('formWorkshop'),
+            listWorkshop: document.getElementById('listWorkshop'),
+            formPengguna: document.getElementById('formPengguna'),
+            listPengguna: document.getElementById('listPengguna'),
+            modal: document.getElementById('modal'),
+            modalContent: document.getElementById('modalContent'),
+            toast: document.getElementById('toast'),
+            toastMessage: document.getElementById('toastMessage'),
         };
 
-        fetch(appsScriptUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify(payload),
-            mode: 'cors', // Penting untuk cross-origin request
-        })
-        .then(res => {
-            if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
-            return res.json();
-        })
-        .then(data => {
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            setData(data);
-        })
-        .catch(err => {
-            console.error(`Error fetching from sheet ${sheetName}:`, err);
-            setError(`Gagal memuat data dari sheet ${sheetName}. Periksa URL atau izin Google Sheet.`);
-        })
-        .finally(() => {
-            setLoading(false);
-        });
-    }, [sheetName, appsScriptUrl]);
-    
-    // Parse JSON strings in data
-    const parsedData = useMemo(() => {
-        return data.map(row => {
-            const newRow = {...row};
+        const firebaseConfig = {
+  apiKey: "AIzaSyCl9qzCOOVmJLjFVf1LVKRKrpTqu984Tbc",
+  authDomain: "manajemen-5r.firebaseapp.com",
+  projectId: "manajemen-5r",
+  storageBucket: "manajemen-5r.firebasestorage.app",
+  messagingSenderId: "1081253818594",
+  appId: "1:1081253818594:web:3c1285b9c483722bbd2ebb",
+  measurementId: "G-RXHZHK04WR"
+};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : '5r-app-default';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let state = {
+            userId: null,
+            loggedInUsername: null,
+            loggedInUserRole: null,
+            appUsers: [],
+            employees: [],
+            workshops: [],
+            audits: [],
+            leaderboardChart: null,
+        };
+
+        const AUDIT_CATEGORIES = [
+            { id: 'ringkas', name: '1R - Ringkas (Seiri)', description: 'Memilah barang yang perlu dan tidak perlu.' },
+            { id: 'rapi', name: '2R - Rapi (Seiton)', description: 'Menata barang sesuai tempatnya.' },
+            { id: 'resik', name: '3R - Resik (Seiso)', description: 'Membersihkan area kerja secara rutin.' },
+            { id: 'rawat', name: '4R - Rawat (Seiketsu)', description: 'Mempertahankan kondisi standar kebersihan.' },
+            { id: 'rajin', name: '5R - Rajin (Shitsuke)', description: 'Menjadikan 5R sebagai kebiasaan.' },
+        ];
+        
+        const handleAuthentication = () => {
+             onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    state.userId = user.uid;
+                    await initializeLoginScreenData();
+                } else {
+                    try {
+                        initialAuthToken ? await signInWithCustomToken(auth, initialAuthToken) : await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Firebase Authentication failed:", error);
+                        DOM.loadingText.textContent = "Gagal Mengautentikasi";
+                        DOM.loginError.textContent = "Gagal mengautentikasi dengan server.";
+                        DOM.loginError.classList.remove('hidden');
+                    }
+                }
+            });
+        };
+
+        const initializeLoginScreenData = async () => {
+            const usersCollection = collection(db, `artifacts/${appId}/public/data/users`);
             try {
-                if(newRow.details && typeof newRow.details === 'string') newRow.details = JSON.parse(newRow.details);
-                if(newRow.items && typeof newRow.items === 'string') newRow.items = JSON.parse(newRow.items);
-            } catch(e) {
-                console.error("Failed to parse JSON in row: ", row, e);
+                const q = query(usersCollection, where("username", "==", "admin"));
+                const querySnapshot = await getDocs(q);
+                if (querySnapshot.empty) {
+                    await addDoc(usersCollection, { username: "admin", password: "admin", role: "Admin" });
+                }
+                const usersSnapshot = await getDocs(usersCollection);
+                state.appUsers = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                
+                DOM.loadingOverlay.classList.add('hidden');
+                DOM.loginScreen.classList.remove('hidden');
+            } catch (error) {
+                console.error("Firestore connection failed:", error);
+                DOM.loadingOverlay.classList.add('hidden');
+                DOM.loginScreen.classList.remove('hidden');
+                DOM.loginError.textContent = "Gagal terhubung ke database. Periksa koneksi internet dan muat ulang.";
+                DOM.loginError.classList.remove('hidden');
+                DOM.loginForm.querySelector('button[type="submit"]').disabled = true;
+                DOM.loginForm.querySelector('button[type="submit"]').classList.add('opacity-50', 'cursor-not-allowed');
             }
-            return newRow;
-        })
-    }, [data]);
+        };
 
-    return { data: parsedData, loading, error };
-};
+        const login = (e) => {
+            e.preventDefault();
+            const username = DOM.loginForm.username.value;
+            const password = DOM.loginForm.password.value;
+            const foundUser = state.appUsers.find(u => u.username === username && u.password === password);
 
-const postToGoogleSheet = (appsScriptUrl, action, payload) => {
-    return fetch(appsScriptUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action, payload }),
-        mode: 'cors',
-    }).then(res => res.json());
-};
-
-
-// --- Komponen-komponen lainnya (Dashboard, 5R, PIC, Item, Data) ---
-
-const Dashboard = ({ appsScriptUrl }) => {
-    const { data: assessments, loading: loadingAssessments, error: errorAssessments } = useGoogleSheet('5R_Assessments', appsScriptUrl);
-    const { data: workshops, loading: loadingWorkshops, error: errorWorkshops } = useGoogleSheet('Workshops', appsScriptUrl);
-    const { data: employees, loading: loadingEmployees, error: errorEmployees } = useGoogleSheet('Employees', appsScriptUrl);
-    
-    const leaderboardData = useMemo(() => {
-        if (!assessments.length || !workshops.length) return [];
-        const workshopMap = new Map(workshops.map(w => [w.id, {...w, totalScore: 0, count: 0}]));
-        assessments.forEach(a => {
-            const workshop = workshopMap.get(a.workshopId);
-            if (workshop && a.details) {
-                const averageScore = Object.values(a.details).reduce((s, v) => s + v.score, 0) / Object.keys(a.details).length;
-                workshop.totalScore += averageScore;
-                workshop.count += 1;
+            if (foundUser) {
+                state.loggedInUsername = foundUser.username;
+                state.loggedInUserRole = foundUser.role;
+                DOM.loginScreen.classList.add('hidden');
+                DOM.appContainer.classList.remove('hidden');
+                initializeAppState();
+            } else {
+                DOM.loginError.textContent = 'Username atau password salah.';
+                DOM.loginError.classList.remove('hidden');
             }
-        });
-        return Array.from(workshopMap.values()).map(w => ({ ...w, averageScore: w.count > 0 ? w.totalScore / w.count : 0 })).sort((a, b) => b.averageScore - a.averageScore);
-    }, [assessments, workshops]);
+        };
 
-    const picPerformanceData = useMemo(() => {
-        if (!assessments.length || !employees.length) return [];
-        const employeeMap = new Map(employees.map(emp => [emp.id, { name: emp.name, picCount: 0, totalScore: 0 }]));
-        assessments.forEach(a => {
-            if (a.picId && employeeMap.has(a.picId)) {
-                const picData = employeeMap.get(a.picId);
-                const assessmentAvg = Object.values(a.details).reduce((sum, detail) => sum + detail.score, 0) / 5;
-                picData.picCount += 1;
-                picData.totalScore += assessmentAvg;
+        const logout = () => {
+            state.loggedInUsername = null;
+            state.loggedInUserRole = null;
+            DOM.appContainer.classList.add('hidden');
+            DOM.loginScreen.classList.remove('hidden');
+            DOM.loginForm.reset();
+            DOM.loginError.classList.add('hidden');
+        };
+
+        const initializeAppState = () => {
+            if (!state.userId) return;
+            DOM.loggedInUserDisplay.textContent = state.loggedInUsername;
+
+            DOM.navPengaturan.style.display = state.loggedInUserRole === 'Admin' ? 'flex' : 'none';
+            DOM.navAudit.style.display = state.loggedInUserRole === 'User' ? 'none' : 'flex';
+            
+            setupEventListeners();
+            fetchData();
+            renderAuditCriteria();
+            showPage('dashboard');
+        };
+
+        const fetchData = () => {
+            const collections = {
+                users: 'pengguna',
+                employees: 'karyawan',
+                workshops: 'workshop',
+                audits: 'audit'
+            };
+            Object.keys(collections).forEach(key => {
+                onSnapshot(collection(db, `artifacts/${appId}/public/data/${key}`), (snapshot) => {
+                    state[key] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    updateUI(key);
+                }, (error) => {
+                    console.error(`Error fetching ${key}:`, error);
+                    showToast(`Gagal memuat data ${collections[key]}.`, "error");
+                });
+            });
+        };
+        
+        const updateUI = (collectionKey) => {
+            switch(collectionKey) {
+                case 'users': renderUserList(); break;
+                case 'employees': 
+                    renderEmployeeList();
+                    renderEmployeeDropdown();
+                    updateDashboardCards();
+                    calculateAndRenderEmployeeLeaderboard(); 
+                    break;
+                case 'workshops': 
+                    renderWorkshopList();
+                    renderWorkshopDropdown();
+                    updateDashboardCards();
+                    calculateAndRenderWorkshopLeaderboard();
+                    break;
+                case 'audits':
+                    renderLaporanTable();
+                    updateDashboardCards();
+                    calculateAndRenderEmployeeLeaderboard(); 
+                    calculateAndRenderWorkshopLeaderboard();
+                    break;
             }
-        });
-        return Array.from(employeeMap.values()).filter(emp => emp.picCount > 0).map(emp => ({ ...emp, averageScore: emp.totalScore / emp.picCount })).sort((a, b) => b.averageScore - a.averageScore);
-    }, [assessments, employees]);
+        };
 
-    if (loadingAssessments || loadingWorkshops || loadingEmployees) {
-        return <div className="text-center text-gray-400">Memuat data dasbor...</div>
-    }
-    
-    const anyError = errorAssessments || errorWorkshops || errorEmployees;
-    if (anyError) {
-        return <div className="p-4 bg-red-800/50 text-red-300 rounded-lg">{anyError}</div>
-    }
+        const renderUserList = () => {
+            DOM.listPengguna.innerHTML = state.appUsers.map(user => {
+                const isAdmin = user.username === 'admin';
+                const actionButtons = `
+                    <button data-id="${user.id}" class="edit-pengguna text-sky-500 hover:text-sky-700 p-1"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                    ${!isAdmin ? `<button data-id="${user.id}" class="delete-pengguna text-red-500 hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                `;
+                return `<li class="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
+                    <div>
+                        <p class="font-medium">${user.username}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Bagian: ${user.role}</p>
+                    </div>
+                    <div class="flex gap-2">${actionButtons}</div>
+                </li>`;
+            }).join('');
+            lucide.createIcons();
+        };
 
-    return (<div><h1 className="text-3xl font-bold text-white mb-6">Dasbor & Klasemen</h1><div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.2}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-yellow-400 mb-4 flex items-center"><Award className="mr-2"/>Workshop Terbaik</h2><div className="space-y-3">{leaderboardData.slice(0,3).map((w, i) => (<div key={w.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{i+1} {w.name}</p><p className="font-bold text-green-400">{w.averageScore.toFixed(2)}</p></div>))}{leaderboardData.length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.3}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-cyan-400 mb-4 flex items-center"><Star className="mr-2"/>Karyawan Terbaik (PIC)</h2><div className="space-y-3">{picPerformanceData.slice(0,3).map((p, i) => (<div key={p.name} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{i+1} {p.name}</p><p className="font-bold text-cyan-400">{p.averageScore.toFixed(2)}</p></div>))}{picPerformanceData.length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div><motion.div initial={{opacity: 0, y: 20}} animate={{opacity: 1, y: 0}} transition={{delay: 0.4}} className="bg-gray-800 p-6 rounded-xl shadow-lg"><h2 className="text-xl font-semibold text-red-400 mb-4 flex items-center"><TrendingUp className="mr-2"/>Workshop Perlu Perhatian</h2><div className="space-y-3">{leaderboardData.filter(w => w.count > 0).slice(-3).reverse().map((w, i) => (<div key={w.id} className="flex items-center justify-between bg-gray-700 p-3 rounded-lg"><p>#{leaderboardData.length - i} {w.name}</p><p className="font-bold text-red-400">{w.averageScore.toFixed(2)}</p></div>))}{leaderboardData.filter(w => w.count > 0).length === 0 && <p className="text-gray-400">Belum ada data.</p>}</div></motion.div></div></div>);
-};
+        const renderEmployeeList = () => {
+            DOM.listKaryawan.innerHTML = state.employees.map(emp => `
+                <li class="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
+                    <div>
+                        <p class="font-medium">${emp.name}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">NIK: ${emp.nik || 'N/A'}</p>
+                    </div>
+                    <button data-id="${emp.id}" class="delete-karyawan text-red-500 hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </li>`).join('');
+            lucide.createIcons();
+        };
 
-const FiveRAssessmentPage = ({ appsScriptUrl, setPage }) => {
-    const { data: workshops } = useGoogleSheet('Workshops', appsScriptUrl);
-    const { data: employees } = useGoogleSheet('Employees', appsScriptUrl);
-    const [selectedWorkshop, setSelectedWorkshop] = useState('');
-    const [selectedPIC, setSelectedPIC] = useState('');
-    const initialAssessmentState = { ringkas: { score: 5, description: ''}, rapi: { score: 5, description: ''}, resik: { score: 5, description: ''}, rawat: { score: 5, description: '' }, rajin: { score: 5, description: '' }, };
-    const [details, setDetails] = useState(initialAssessmentState);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [infoModalOpen, setInfoModalOpen] = useState(false);
-    
-    useEffect(() => {
-        if(workshops.length > 0) setSelectedWorkshop(workshops[0].id);
-        if(employees.length > 0) setSelectedPIC(employees[0].id);
-    }, [workshops, employees])
-    
-    const handleSubmit = async (e) => {
-        e.preventDefault(); setIsSubmitting(true);
-        try {
-            await postToGoogleSheet(appsScriptUrl, 'addAssessment', { workshopId: selectedWorkshop, picId: selectedPIC, details });
-            setDetails(initialAssessmentState);
-            alert("Penilaian berhasil disimpan!");
-            setPage('dashboard');
-        } catch (err) { console.error(err); alert("Gagal menyimpan penilaian.") } finally { setIsSubmitting(false); }
-    };
-    return (<> <AnimatePresence>{infoModalOpen && <FiveRInfoModal onClose={() => setInfoModalOpen(false)} />}</AnimatePresence> <div className="max-w-2xl mx-auto"><div className="flex justify-between items-center mb-6"><h1 className="text-3xl font-bold text-white">Penilaian 5R</h1><motion.button whileHover={{scale: 1.1}} whileTap={{scale: 0.9}} onClick={() => setInfoModalOpen(true)} className="p-2 rounded-full bg-gray-700 hover:bg-blue-600"><Info className="h-5 w-5"/></motion.button></div><form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6"><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><select value={selectedWorkshop} onChange={e => setSelectedWorkshop(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"><option disabled value="">Pilih Workshop</option>{workshops.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><select value={selectedPIC} onChange={e => setSelectedPIC(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg"><option disabled value="">Pilih PIC</option>{employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}</select></div><p className="text-gray-400 text-sm">Fitur upload foto tidak tersedia saat menggunakan Google Sheets sebagai database.</p><motion.button type="submit" disabled={isSubmitting || !selectedWorkshop || !selectedPIC} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 disabled:bg-gray-500"> {isSubmitting ? 'Menyimpan...' : 'Simpan Penilaian'}</motion.button></form></div> </>);
-};
+        const renderWorkshopList = () => {
+            DOM.listWorkshop.innerHTML = state.workshops.map(ws => `
+                <li class="flex justify-between items-center p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
+                    <span>${ws.name}</span>
+                    <button data-id="${ws.id}" class="delete-workshop text-red-500 hover:text-red-700 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </li>`).join('');
+            lucide.createIcons();
+        };
 
-const PicPerformancePage = ({ appsScriptUrl }) => {
-    const { data: assessments, loading: loadingAssessments, error: errorAssessments } = useGoogleSheet('5R_Assessments', appsScriptUrl);
-    const { data: employees, loading: loadingEmployees, error: errorEmployees } = useGoogleSheet('Employees', appsScriptUrl);
-    const picPerformanceData = useMemo(() => {
-        if (!assessments.length || !employees.length) return [];
-        const employeeMap = new Map(employees.map(emp => [emp.id, { name: emp.name, picCount: 0, totalScore: 0 }]));
-        assessments.forEach(a => {
-            if (a.picId && employeeMap.has(a.picId)) {
-                const picData = employeeMap.get(a.picId);
-                const assessmentAvg = Object.values(a.details).reduce((sum, detail) => sum + detail.score, 0) / 5;
-                picData.picCount += 1;
-                picData.totalScore += assessmentAvg;
+        const renderEmployeeDropdown = () => {
+            DOM.auditKaryawan.innerHTML = '<option value="" disabled selected>Pilih Karyawan</option>' + state.employees.map(emp => `<option value="${emp.id}">${emp.name} (${emp.nik || 'N/A'})</option>`).join('');
+        };
+
+        const renderWorkshopDropdown = () => {
+            DOM.auditWorkshop.innerHTML = '<option value="" disabled selected>Pilih Workshop</option>' + state.workshops.map(ws => `<option value="${ws.id}">${ws.name}</option>`).join('');
+        };
+
+        const renderAuditCriteria = () => {
+            DOM.auditCriteriaContainer.innerHTML = AUDIT_CATEGORIES.map(cat => `
+                <div class="border-t dark:border-slate-700 pt-6">
+                    <h4 class="text-lg font-bold">${cat.name}</h4>
+                    <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">${cat.description}</p>
+                    <div class="flex items-center justify-center space-x-2 sm:space-x-4">
+                        ${[1,2,3,4,5].map(score => `
+                            <label class="flex flex-col items-center cursor-pointer">
+                                <input type="radio" name="${cat.id}" value="${score}" class="peer sr-only" required>
+                                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center text-lg font-bold border-2 border-slate-300 dark:border-slate-600 peer-checked:bg-sky-500 peer-checked:text-white peer-checked:border-sky-500 transition-all">${score}</div>
+                                <span class="text-xs mt-1 text-slate-500">${score === 1 ? 'Buruk' : score === 5 ? 'Baik' : ''}</span>
+                            </label>`).join('')}
+                    </div>
+                </div>`).join('');
+        };
+
+        const updateDashboardCards = () => {
+            DOM.totalKaryawan.textContent = state.employees.length;
+            DOM.totalWorkshop.textContent = state.workshops.length;
+            DOM.totalAudit.textContent = state.audits.length;
+        };
+
+        const renderLaporanTable = () => {
+            if (state.audits.length === 0) {
+                DOM.laporanTableBody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-slate-500">Belum ada data audit.</td></tr>`;
+                return;
             }
-        });
-        return Array.from(employeeMap.values()).filter(emp => emp.picCount > 0).map(emp => ({ ...emp, averageScore: emp.totalScore / emp.picCount })).sort((a, b) => b.averageScore - a.averageScore);
-    }, [assessments, employees]);
-    return (<div><h1 className="text-3xl font-bold text-white mb-6">Kinerja Karyawan (PIC)</h1><div className="bg-gray-800 p-4 rounded-xl shadow-lg space-y-3">{picPerformanceData.map((pic, index) => ( <motion.div key={pic.name} initial={{opacity:0, x: -20}} animate={{opacity:1, x:0}} transition={{delay: index * 0.1}} className="bg-gray-700 p-4 rounded-lg flex items-center justify-between"><div className="flex items-center"><span className="font-bold text-lg text-gray-400 mr-4">#{index + 1}</span><div><p className="font-semibold text-white">{pic.name}</p><p className="text-xs text-gray-400">PIC sebanyak {pic.picCount} kali</p></div></div><div className="text-right"><p className="font-bold text-2xl text-blue-400">{pic.averageScore.toFixed(2)}</p><p className="text-xs text-gray-500">Skor rata-rata</p></div></motion.div>))}{picPerformanceData.length === 0 && (<div className="text-center py-8"><Users className="mx-auto h-12 w-12 text-gray-500 mb-2"/><p className="text-gray-400">Belum ada data kinerja PIC.</p></div>)}</div></div>);
-};
+            DOM.laporanTableBody.innerHTML = [...state.audits]
+                .sort((a, b) => b.timestamp.seconds - a.timestamp.seconds)
+                .map(audit => {
+                    const employee = state.employees.find(e => e.id === audit.employeeId);
+                    const workshop = state.workshops.find(w => w.id === audit.workshopId);
+                    return `
+                        <tr class="bg-white dark:bg-slate-800 border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600/50">
+                            <td class="px-6 py-4 font-medium">${new Date(audit.timestamp.seconds * 1000).toLocaleDateString('id-ID')}</td>
+                            <td class="px-6 py-4">${employee ? `${employee.name} (${employee.nik || 'N/A'})` : 'N/A'}</td>
+                            <td class="px-6 py-4">${workshop ? workshop.name : 'N/A'}</td>
+                            <td class="px-6 py-4 font-bold text-sky-500">${audit.totalScore}</td>
+                            <td class="px-6 py-4 text-center">
+                                <button class="view-detail-btn text-sky-500 hover:underline" data-id="${audit.id}">Lihat</button>
+                            </td>
+                        </tr>`;
+            }).join('');
+        };
+        
+        const calculateAndRenderLeaderboards = () => {
+            if (state.audits.length === 0) {
+                renderEmptyLeaderboard();
+                renderEmptyTopPerformers('topWorkshopsList', 'workshop');
+                return;
+            }
 
-const ItemRequestPage = ({ appsScriptUrl, setPage }) => {
-    const { data: workshops } = useGoogleSheet('Workshops', appsScriptUrl);
-    const [items, setItems] = useState([{ id: Date.now(), name: '', quantity: 1 }]);
-    const [selectedWorkshop, setSelectedWorkshop] = useState('');
-    const [reason, setReason] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [message, setMessage] = useState('');
-    useEffect(() => {if(workshops.length > 0) setSelectedWorkshop(workshops[0].id)}, [workshops]);
-    const handleItemChange = (id, field, value) => setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
-    const addItemRow = () => setItems([...items, { id: Date.now(), name: '', quantity: 1 }]);
-    const removeItemRow = (id) => setItems(items.filter(item => item.id !== id));
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        const validItems = items.filter(item => item.name.trim() !== '');
-        if (validItems.length === 0 || !selectedWorkshop || !reason) { setMessage("Harap isi semua field."); return; }
-        setIsSubmitting(true); setMessage('');
-        try {
-            await postToGoogleSheet(appsScriptUrl, 'addItemRequest', { items: validItems, workshopId: selectedWorkshop, reason, status: 'pending' });
-            setMessage("Permintaan berhasil dikirim!");
-            setItems([{ id: Date.now(), name: '', quantity: 1 }]); setReason('');
-            setTimeout(() => { setMessage(''); setPage('dashboard'); }, 1500);
-        } catch (err) { setMessage("Gagal mengirim permintaan."); } finally { setIsSubmitting(false); }
-    };
-    return (<div><h1 className="text-3xl font-bold text-white mb-6">Permintaan Barang</h1><form onSubmit={handleSubmit} className="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6"><div className="space-y-4"><AnimatePresence>{items.map((item, index) => (<motion.div key={item.id} layout initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -300, transition: { duration: 0.3 } }} className="flex items-center space-x-2"><input type="text" placeholder={`Barang #${index + 1}`} value={item.name} onChange={e=> handleItemChange(item.id, 'name', e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" /><input type="number" min="1" value={item.quantity} onChange={e=> handleItemChange(item.id, 'quantity', e.target.value)} className="w-24 p-3 bg-gray-700 border border-gray-600 rounded-lg" />{items.length > 1 && <motion.button type="button" onClick={() => removeItemRow(item.id)} className="p-3 text-red-400 hover:text-red-300" whileTap={{ scale: 0.9 }}><XCircle size={20}/></motion.button>}</motion.div>))}</AnimatePresence></div><motion.button type="button" onClick={addItemRow} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full flex justify-center items-center p-2 bg-gray-700 hover:bg-gray-600 text-blue-400 rounded-lg transition-colors"><Plus className="mr-2" size={16}/> Tambah Barang</motion.button><div className="pt-6 border-t border-gray-700 space-y-4"><select value={selectedWorkshop} onChange={e => setSelectedWorkshop(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" required><option value="" disabled>Pilih Workshop Tujuan</option>{workshops.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><textarea placeholder="Alasan Permintaan..." value={reason} onChange={e=>setReason(e.target.value)} className="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg" rows="3" required></textarea></div>{message && <p className={`text-sm text-center ${message.includes('Gagal') ? 'text-red-400' : 'text-green-400'}`}>{message}</p>}<motion.button type="submit" disabled={isSubmitting} whileHover={{scale: 1.02}} whileTap={{scale: 0.98}} className="w-full bg-green-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-700 disabled:bg-gray-500 flex items-center justify-center"><Send className="mr-2 h-5 w-5"/>{isSubmitting ? 'Mengirim...' : 'Kirim Semua Permintaan'}</motion.button></form></div>);
-};
+            const calculateAverages = (key) => {
+                const scores = {};
+                state.audits.forEach(audit => {
+                    const id = audit[key];
+                    if (!scores[id]) scores[id] = { total: 0, count: 0 };
+                    scores[id].total += audit.totalScore;
+                    scores[id].count++;
+                });
+                const sourceData = key === 'employeeId' ? state.employees : state.workshops;
+                return Object.keys(scores).map(id => {
+                    const item = sourceData.find(d => d.id === id);
+                    return {
+                        name: item ? item.name : 'Data Dihapus',
+                        avgScore: scores[id].total / scores[id].count
+                    };
+                }).sort((a, b) => b.avgScore - a.avgScore);
+            };
 
-const DataManagementPage = ({ appsScriptUrl }) => {
-    return (<div><h1 className="text-3xl font-bold text-white mb-6">Manajemen Data</h1> ... </div>);
-};
+            const employeeLeaderboard = calculateAverages('employeeId');
+            const workshopLeaderboard = calculateAverages('workshopId');
 
+            renderTopPerformers(employeeLeaderboard.slice(0, 3), 'topEmployeesList', 'karyawan');
+            renderTopPerformers(workshopLeaderboard.slice(0, 3), 'topWorkshopsList', 'workshop');
+            renderLeaderboardChart(employeeLeaderboard.slice(0, 10));
+        };
 
-const BottomNav = ({ activePage, setPage }) => {
-  const navItems = [ { id: 'dashboard', label: 'Dasbor', icon: Award }, { id: '5r_assessment', label: 'Nilai 5R', icon: ClipboardList }, { id: 'item_request', label: 'Barang', icon: Plus }, { id: 'employee_assessment', label: 'Karyawan', icon: Users }, { id: 'data_management', label: 'Data', icon: BarChart2 }, ];
-  return (<nav className="fixed bottom-0 left-0 right-0 bg-gray-800 border-t border-gray-700 flex justify-around shadow-top z-20">{navItems.map(item => (<motion.button key={item.id} onClick={() => setPage(item.id)} className={`relative flex flex-col items-center justify-center w-full pt-3 pb-2 text-xs transition-colors duration-300 ${activePage === item.id ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>{activePage === item.id && (<motion.div layoutId="active-nav-bubble" className="absolute inset-0 bg-blue-500/10" style={{borderRadius: '12px'}}></motion.div>)}<item.icon className={`h-6 w-6 mb-1`} />{item.label}</motion.button>))}</nav>);
-};
+        const calculateAndRenderEmployeeLeaderboard = calculateAndRenderLeaderboards;
+        const calculateAndRenderWorkshopLeaderboard = calculateAndRenderLeaderboards;
+
+        const renderTopPerformers = (data, elementId, type) => {
+            const listElement = document.getElementById(elementId);
+            if(data.length === 0) {
+                renderEmptyTopPerformers(elementId, type);
+                return;
+            }
+            listElement.innerHTML = data.map((item, index) => `
+                <li class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50 rounded-lg">
+                    <div class="flex items-center gap-4">
+                        <span class="text-lg ${index === 0 ? 'text-amber-400' : index === 1 ? 'text-slate-400' : 'text-amber-600'}">🏆</span>
+                        <div>
+                            <p class="font-semibold">${item.name}</p>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Skor: ${item.avgScore.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <div class="text-lg font-bold text-slate-400 dark:text-slate-500">#${index + 1}</div>
+                </li>`).join('');
+        };
+        
+        const renderEmptyTopPerformers = (elementId, type) => {
+             document.getElementById(elementId).innerHTML = `<li class="text-center text-slate-500 py-4">Belum ada data ${type}.</li>`;
+        };
+        
+        const renderEmptyLeaderboard = () => {
+            if(state.leaderboardChart) state.leaderboardChart.destroy();
+            const ctx = DOM.leaderboardChartCtx;
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.font = "16px Inter";
+            ctx.fillStyle = document.body.classList.contains('dark') ? '#94a3b8' : '#64748b';
+            ctx.textAlign = "center";
+            ctx.fillText("Data audit tidak cukup untuk menampilkan klasemen.", ctx.canvas.width / 2, ctx.canvas.height / 2);
+            renderEmptyTopPerformers('topEmployeesList', 'karyawan');
+        };
+
+        const renderLeaderboardChart = (data) => {
+            if (state.leaderboardChart) state.leaderboardChart.destroy();
+            state.leaderboardChart = new Chart(DOM.leaderboardChartCtx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(d => d.name),
+                    datasets: [{
+                        label: 'Skor Rata-rata',
+                        data: data.map(d => d.avgScore.toFixed(2)),
+                        backgroundColor: 'rgba(56, 189, 248, 0.6)',
+                        borderColor: 'rgba(14, 165, 233, 1)',
+                        borderWidth: 1,
+                        borderRadius: 5,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true, max: 25, grid: { color: document.body.classList.contains('dark') ? '#334155' : '#e2e8f0' }, ticks: { color: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b' } },
+                        x: { grid: { display: false }, ticks: { color: document.body.classList.contains('dark') ? '#94a3b8' : '#64748b' } }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { displayColors: false } }
+                }
+            });
+        };
+
+        const setupEventListeners = () => {
+            document.querySelectorAll('.nav-link').forEach(link => link.addEventListener('click', (e) => showPage(e.currentTarget.dataset.page)));
+            DOM.loginForm.addEventListener('submit', login);
+            DOM.logoutBtn.addEventListener('click', logout);
+            DOM.formKaryawan.addEventListener('submit', handleAddKaryawan);
+            DOM.formWorkshop.addEventListener('submit', handleAddWorkshop);
+            DOM.formPengguna.addEventListener('submit', handleAddPengguna);
+            DOM.listKaryawan.addEventListener('click', handleDeleteKaryawan);
+            DOM.listWorkshop.addEventListener('click', handleDeleteWorkshop);
+            DOM.listPengguna.addEventListener('click', handleUserActions);
+            DOM.auditForm.addEventListener('submit', handleSaveAudit);
+            DOM.exportPdfBtn.addEventListener('click', exportToPDF);
+            DOM.exportExcelBtn.addEventListener('click', exportToExcel);
+            DOM.laporanTableBody.addEventListener('click', handleViewDetail);
+            DOM.modal.addEventListener('click', (e) => { if(e.target.id === 'modal' || e.target.closest('.modal-close')) closeModal(); });
+        };
+        
+        const handleUserActions = (e) => {
+            const deleteButton = e.target.closest('.delete-pengguna');
+            const editButton = e.target.closest('.edit-pengguna');
+            if (deleteButton) {
+                const user = state.appUsers.find(u => u.id === deleteButton.dataset.id);
+                showConfirmationModal(`Yakin ingin menghapus pengguna "${user.username}"?`, () => {
+                     deleteDoc(doc(db, `artifacts/${appId}/public/data/users`, user.id));
+                     showToast('Pengguna berhasil dihapus.');
+                });
+            }
+            if (editButton) showEditUserModal(editButton.dataset.id);
+        };
+
+        const handleAddEntity = async (form, collectionName, data, successMessage) => {
+            try {
+                await addDoc(collection(db, `artifacts/${appId}/public/data/${collectionName}`), data);
+                form.reset();
+                showToast(successMessage);
+            } catch (error) {
+                console.error(`Error adding to ${collectionName}:`, error);
+                showToast(`Gagal menambahkan data.`, 'error');
+            }
+        };
+
+        const handleAddPengguna = (e) => {
+            e.preventDefault();
+            const { usernamePengguna, passwordPengguna, rolePengguna } = DOM.formPengguna.elements;
+            if (state.appUsers.some(u => u.username === usernamePengguna.value.trim())) {
+                showToast('Username sudah ada.', 'error');
+                return;
+            }
+            handleAddEntity(DOM.formPengguna, 'users', { username: usernamePengguna.value.trim(), password: passwordPengguna.value.trim(), role: rolePengguna.value }, 'Pengguna berhasil ditambahkan.');
+        };
+        
+        const handleAddKaryawan = (e) => {
+            e.preventDefault();
+            const { nikKaryawan, namaKaryawan } = DOM.formKaryawan.elements;
+            handleAddEntity(DOM.formKaryawan, 'employees', { name: namaKaryawan.value.trim(), nik: nikKaryawan.value.trim() }, 'Karyawan berhasil ditambahkan.');
+        };
+
+        const handleAddWorkshop = (e) => {
+            e.preventDefault();
+            const { namaWorkshop } = DOM.formWorkshop.elements;
+            handleAddEntity(DOM.formWorkshop, 'workshops', { name: namaWorkshop.value.trim() }, 'Workshop berhasil ditambahkan.');
+        };
+        
+        const handleDeleteKaryawan = (e) => {
+            const button = e.target.closest('.delete-karyawan');
+            if (button) {
+                const employee = state.employees.find(emp => emp.id === button.dataset.id);
+                showConfirmationModal(`Yakin ingin menghapus karyawan "${employee.name}"?`, () => {
+                     deleteDoc(doc(db, `artifacts/${appId}/public/data/employees`, employee.id));
+                     showToast('Karyawan berhasil dihapus.');
+                });
+            }
+        };
+        
+        const handleDeleteWorkshop = (e) => {
+            const button = e.target.closest('.delete-workshop');
+            if (button) {
+                const workshop = state.workshops.find(ws => ws.id === button.dataset.id);
+                showConfirmationModal(`Yakin ingin menghapus workshop "${workshop.name}"?`, () => {
+                    deleteDoc(doc(db, `artifacts/${appId}/public/data/workshops`, workshop.id));
+                    showToast('Workshop berhasil dihapus.');
+                });
+            }
+        };
+
+        const handleSaveAudit = (e) => {
+            e.preventDefault();
+            const employeeId = DOM.auditKaryawan.value;
+            const workshopId = DOM.auditWorkshop.value;
+            if(!employeeId || !workshopId) {
+                showToast('Harap pilih karyawan dan workshop.', 'error');
+                return;
+            }
+            const scores = {};
+            let totalScore = 0;
+            const allAnswered = AUDIT_CATEGORIES.every(cat => {
+                const selected = DOM.auditForm.querySelector(`input[name="${cat.id}"]:checked`);
+                if(selected) {
+                    scores[cat.id] = parseInt(selected.value);
+                    totalScore += scores[cat.id];
+                    return true;
+                }
+                return false;
+            });
+
+            if(!allAnswered) {
+                showToast('Harap isi semua kriteria audit.', 'error');
+                return;
+            }
+
+            handleAddEntity(DOM.auditForm, 'audits', { employeeId, workshopId, scores, totalScore, timestamp: new Date() }, 'Audit berhasil disimpan.')
+                .then(() => showPage('laporan'));
+        };
+
+        const handleViewDetail = (e) => {
+            const button = e.target.closest('.view-detail-btn');
+            if (button) {
+                const audit = state.audits.find(a => a.id === button.dataset.id);
+                if (audit) {
+                    const employee = state.employees.find(e => e.id === audit.employeeId);
+                    const workshop = state.workshops.find(w => w.id === audit.workshopId);
+                    
+                    DOM.modalContent.innerHTML = `
+                        <div class="flex justify-between items-start">
+                             <h3 class="text-2xl font-bold mb-4">Detail Audit</h3>
+                             <button class="modal-close text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x"></i></button>
+                        </div>
+                        <div class="space-y-4 text-sm">
+                            <p><strong>Tanggal:</strong> ${new Date(audit.timestamp.seconds * 1000).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' })}</p>
+                            <p><strong>Karyawan:</strong> ${employee ? `${employee.name} (NIK: ${employee.nik || 'N/A'})` : 'N/A'}</p>
+                            <p><strong>Workshop:</strong> ${workshop ? workshop.name : 'N/A'}</p>
+                            <p class="text-lg"><strong>Total Skor:</strong> <span class="font-bold text-sky-500">${audit.totalScore}</span></p>
+                            <div class="border-t dark:border-slate-700 pt-4 mt-4">
+                                <h4 class="font-bold mb-2">Rincian Skor:</h4>
+                                <ul class="list-disc list-inside space-y-1">
+                                    ${Object.entries(audit.scores).map(([key, value]) => `<li><strong>${AUDIT_CATEGORIES.find(c=>c.id===key)?.name || key}:</strong> ${value}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>`;
+                    openModal();
+                }
+            }
+        };
+
+        const showPage = (pageId) => {
+            if ((pageId === 'pengaturan' && state.loggedInUserRole !== 'Admin') || (pageId === 'audit' && state.loggedInUserRole === 'User')) {
+                showToast('Anda tidak memiliki akses ke halaman ini.', 'error');
+                return;
+            }
+            document.querySelectorAll('.page-content').forEach(page => page.classList.add('hidden'));
+            document.getElementById(`page-${pageId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('bg-sky-500', 'text-white');
+                if (link.dataset.page === pageId) link.classList.add('bg-sky-500', 'text-white');
+            });
+            if (pageId === 'dashboard') calculateAndRenderLeaderboards();
+        };
+        
+        const showToast = (message, type = 'success') => {
+            const toast = DOM.toast;
+            DOM.toastMessage.textContent = message;
+            toast.className = `fixed bottom-5 right-5 py-3 px-5 rounded-lg shadow-xl translate-y-20 opacity-0 transition-all duration-300 ${type === 'success' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900' : type === 'error' ? 'bg-red-600 text-white' : 'bg-sky-500 text-white'}`;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => toast.classList.add('translate-y-20', 'opacity-0'), 3000);
+        };
+
+        const openModal = () => {
+            DOM.modal.classList.remove('hidden');
+            setTimeout(() => DOM.modalContent.classList.remove('scale-95', 'opacity-0'), 10);
+            lucide.createIcons();
+        };
+
+        const closeModal = () => {
+            DOM.modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => DOM.modal.classList.add('hidden'), 200);
+        };
+
+        const showConfirmationModal = (message, onConfirm) => {
+            DOM.modalContent.innerHTML = `
+                <h3 class="text-xl font-bold mb-4">Konfirmasi</h3>
+                <p class="text-slate-600 dark:text-slate-300 mb-6">${message}</p>
+                <div class="flex justify-end gap-3">
+                    <button class="modal-close px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500">Batal</button>
+                    <button id="confirmBtn" class="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600">Hapus</button>
+                </div>`;
+            openModal();
+            document.getElementById('confirmBtn').addEventListener('click', () => { onConfirm(); closeModal(); });
+        };
+
+        const showEditUserModal = (userId) => {
+            const user = state.appUsers.find(u => u.id === userId);
+            if (!user) return;
+            const isAdmin = user.username === 'admin';
+            DOM.modalContent.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <h3 class="text-2xl font-bold mb-4">Edit Pengguna</h3>
+                    <button class="modal-close text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i data-lucide="x"></i></button>
+                </div>
+                <form id="editUserForm" data-id="${userId}" class="space-y-4">
+                    <div>
+                        <label for="editUsername" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Username</label>
+                        <input type="text" id="editUsername" value="${user.username}" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 ${isAdmin ? 'bg-slate-200 dark:bg-slate-600 cursor-not-allowed' : ''}" ${isAdmin ? 'disabled' : ''}>
+                    </div>
+                    <div>
+                        <label for="editPassword" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Password Baru (opsional)</label>
+                        <input type="password" id="editPassword" placeholder="Biarkan kosong jika tidak berubah" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2">
+                    </div>
+                    <div>
+                        <label for="editRole" class="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1">Nama Bagian</label>
+                        <select id="editRole" required class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg p-2 ${isAdmin ? 'bg-slate-200 dark:bg-slate-600 cursor-not-allowed' : ''}" ${isAdmin ? 'disabled' : ''}>
+                            <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                            <option value="Auditor" ${user.role === 'Auditor' ? 'selected' : ''}>Auditor</option>
+                            <option value="User" ${user.role === 'User' ? 'selected' : ''}>User</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end gap-3 pt-4">
+                        <button type="button" class="modal-close px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500">Batal</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg bg-sky-500 text-white hover:bg-sky-600">Simpan Perubahan</button>
+                    </div>
+                </form>`;
+            openModal();
+            document.getElementById('editUserForm').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const originalUser = state.appUsers.find(u => u.id === form.dataset.id);
+                const updatedData = {};
+                const newPassword = form.editPassword.value.trim();
+                if (newPassword) updatedData.password = newPassword;
+
+                if (!isAdmin) {
+                    const newUsername = form.editUsername.value.trim();
+                    if (newUsername !== originalUser.username && state.appUsers.some(u => u.username === newUsername)) {
+                        showToast('Username baru sudah digunakan.', 'error');
+                        return;
+                    }
+                    updatedData.username = newUsername;
+                    updatedData.role = form.editRole.value;
+                }
+                
+                if (Object.keys(updatedData).length > 0) {
+                    await updateDoc(doc(db, `artifacts/${appId}/public/data/users`, form.dataset.id), updatedData);
+                    showToast('Data pengguna berhasil diperbarui.');
+                    closeModal();
+                } else {
+                    showToast('Tidak ada perubahan untuk disimpan.', 'info');
+                    closeModal();
+                }
+            });
+        };
+        
+        const exportToPDF = () => {
+            if (state.audits.length === 0) return showToast('Tidak ada data untuk diekspor.', 'error');
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            
+            doc.setFontSize(18);
+            doc.text("Laporan Audit 5R", 14, 22);
+            doc.setFontSize(11);
+            doc.setTextColor(100);
+            doc.text(`Tanggal Ekspor: ${new Date().toLocaleDateString('id-ID')}`, 14, 30);
+
+            const tableData = state.audits.map(audit => {
+                const employee = state.employees.find(e => e.id === audit.employeeId);
+                const workshop = state.workshops.find(w => w.id === audit.workshopId);
+                return [ new Date(audit.timestamp.seconds * 1000).toLocaleDateString('id-ID'), employee ? employee.nik : 'N/A', employee ? employee.name : 'N/A', workshop ? workshop.name : 'N/A', audit.totalScore ];
+            });
+
+            doc.autoTable({ startY: 35, head: [['Tanggal', 'NIK', 'Karyawan', 'Workshop', 'Total Skor']], body: tableData, theme: 'grid', headStyles: { fillColor: [14, 165, 233] } });
+            doc.save('laporan-audit-5r.pdf');
+            showToast('Laporan PDF berhasil dibuat.');
+        };
+
+        const exportToExcel = () => {
+            if (state.audits.length === 0) return showToast('Tidak ada data untuk diekspor.', 'error');
+            const dataToExport = state.audits.map(audit => {
+                const employee = state.employees.find(e => e.id === audit.employeeId);
+                const workshop = state.workshops.find(w => w.id === audit.workshopId);
+                return {
+                    'Tanggal': new Date(audit.timestamp.seconds * 1000).toLocaleDateString('id-ID'), 'NIK': employee?.nik || 'N/A', 'Karyawan': employee?.name || 'N/A', 'Workshop': workshop?.name || 'N/A',
+                    'Skor Ringkas': audit.scores.ringkas, 'Skor Rapi': audit.scores.rapi, 'Skor Resik': audit.scores.resik, 'Skor Rawat': audit.scores.rawat, 'Skor Rajin': audit.scores.rajin,
+                    'Total Skor': audit.totalScore
+                };
+            });
+            const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Audit 5R");
+            XLSX.writeFile(workbook, "Laporan-Audit-5R.xlsx");
+            showToast('Laporan Excel berhasil dibuat.');
+        };
+
+        window.onload = () => {
+            lucide.createIcons();
+            handleAuthentication();
+        };
+
+    </script>
+</body>
+</html>
